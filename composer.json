@@ -1,0 +1,12 @@
+{
+    "name": "nbiclearance/app",
+    "authors": [
+        {
+            "name": "KenshinCantCode",
+            "email": "keen.ruiz.ui@phinmaed.com"
+        }
+    ],
+    "require": {
+        "phpmailer/phpmailer": "^7.0"
+    }
+}

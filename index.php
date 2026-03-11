@@ -1,3 +1,8 @@
+<?php
+require_once 'auth_helpers.php';
+$flash = pullFlashMessage();
+$showSignUp = (isset($_GET['form']) && $_GET['form'] === 'signup');
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,27 +21,17 @@
             <p class="eyebrow">National Bureau of Investigation</p>
             <h1>Clearance System Portal</h1>
             <p class="auth-copy">Access your account to manage your NBI clearance application in a secure and streamlined workspace.</p>
-            <div class="auth-points">
-                <span><i class="fa-solid fa-shield-halved"></i> Secure sign in</span>
-                <span><i class="fa-solid fa-bolt"></i> Faster processing</span>
-                <span><i class="fa-solid fa-circle-check"></i> Centralized updates</span>
-            </div>
-            <div class="auth-metrics">
-                <div>
-                    <strong>24/7</strong>
-                    <p>Account access</p>
-                </div>
-                <div>
-                    <strong>100%</strong>
-                    <p>Web responsive</p>
-                </div>
-            </div>
         </aside>
 
         <main class="auth-panel">
-            <div class="container" id="signup" style="display:none;">
+            <div class="container" id="signup" style="display:<?php echo $showSignUp ? 'block' : 'none'; ?>;">
               <h2 class="form-title">Create Account</h2>
               <p class="form-subtitle">Set up your account to begin your application.</p>
+              <?php if ($flash && $showSignUp): ?>
+                <div class="notice notice-<?php echo htmlspecialchars($flash['type']); ?>">
+                    <?php echo htmlspecialchars($flash['message']); ?>
+                </div>
+              <?php endif; ?>
               <form method="post" action="register.php">
                 <div class="input-group">
                    <i class="fas fa-user"></i>
@@ -66,9 +61,14 @@
               </div>
             </div>
 
-            <div class="container" id="signIn">
+            <div class="container" id="signIn" style="display:<?php echo $showSignUp ? 'none' : 'block'; ?>;">
                 <h2 class="form-title">Welcome Back</h2>
                 <p class="form-subtitle">Sign in to continue to your dashboard.</p>
+                <?php if ($flash && !$showSignUp): ?>
+                    <div class="notice notice-<?php echo htmlspecialchars($flash['type']); ?>">
+                        <?php echo htmlspecialchars($flash['message']); ?>
+                    </div>
+                <?php endif; ?>
                 <form method="post" action="register.php">
                   <div class="input-group">
                       <i class="fas fa-envelope"></i>
@@ -81,13 +81,17 @@
                       <label for="signinPassword">Password</label>
                   </div>
                   <p class="recover">
-                    <a href="#">Recover Password</a>
+                    <a href="forgot_password.php">Recover Password</a>
                   </p>
                  <input type="submit" class="btn" value="Sign In" name="signIn">
                 </form>
                 <div class="links">
                   <p>Need an account?</p>
                   <button type="button" id="signUpButton">Sign Up</button>
+                </div>
+                <div class="links">
+                  <p>Admin access?</p>
+                  <a class="text-link" href="admin_login.php">Admin Login</a>
                 </div>
             </div>
         </main>
