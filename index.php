@@ -13,7 +13,7 @@ $showSignUp = (isset($_GET['form']) && $_GET['form'] === 'signup');
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=<?php echo (int) (@filemtime(__DIR__ . '/style.css') ?: time()); ?>">
 </head>
 <body class="auth-page">
     <div class="auth-layout">
@@ -96,6 +96,6 @@ $showSignUp = (isset($_GET['form']) && $_GET['form'] === 'signup');
             </div>
         </main>
     </div>
-    <script src="script.js"></script>
+    <script src="script.js?v=<?php echo (int) (@filemtime(__DIR__ . '/script.js') ?: time()); ?>"></script>
 </body>
 </html>

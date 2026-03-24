@@ -18,87 +18,51 @@ if (signUpButton && signInButton && signInForm && signUpForm) {
 const menuToggle = document.getElementById("menuToggle");
 const sidebar = document.getElementById("sidebar");
 const overlay = document.getElementById("overlay");
+const homeLayout = document.querySelector(".home-layout");
 
-if (menuToggle && sidebar && overlay) {
-    const openSidebar = () => {
-        sidebar.classList.add("show");
-        overlay.classList.add("show");
-        menuToggle.classList.add("is-active");
-        document.body.classList.add("menu-open");
+if (menuToggle && sidebar && overlay && homeLayout) {
+    const setSidebarState = (isOpen) => {
+        homeLayout.classList.toggle("sidebar-open", isOpen);
+        sidebar.classList.toggle("show", isOpen);
+        overlay.classList.toggle("show", isOpen);
+        menuToggle.classList.toggle("is-active", isOpen);
+        document.body.classList.toggle("menu-open", isOpen);
+        menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        menuToggle.setAttribute("aria-label", isOpen ? "Close sidebar" : "Open sidebar");
+        sidebar.setAttribute("aria-hidden", isOpen ? "false" : "true");
     };
 
     const closeSidebar = () => {
-        sidebar.classList.remove("show");
-        overlay.classList.remove("show");
-        menuToggle.classList.remove("is-active");
-        document.body.classList.remove("menu-open");
+        setSidebarState(false);
     };
 
     menuToggle.addEventListener("click", () => {
-        if (sidebar.classList.contains("show")) {
-            closeSidebar();
-        } else {
-            openSidebar();
-        }
+        const isOpen = homeLayout.classList.contains("sidebar-open");
+        setSidebarState(!isOpen);
     });
 
     overlay.addEventListener("click", closeSidebar);
 
     const navLinks = document.querySelectorAll("[data-nav-link]");
     navLinks.forEach((link) => {
-        link.addEventListener("click", () => {
-            if (window.innerWidth <= 840) {
-                closeSidebar();
-            }
-        });
+        link.addEventListener("click", closeSidebar);
     });
 
     document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && sidebar.classList.contains("show")) {
+        if (event.key === "Escape" && homeLayout.classList.contains("sidebar-open")) {
             closeSidebar();
         }
     });
 
     window.addEventListener("resize", () => {
-        if (window.innerWidth > 840) {
-            closeSidebar();
+        if (!homeLayout.classList.contains("sidebar-open")) {
+            document.body.classList.remove("menu-open");
         }
     });
+
+    closeSidebar();
 }
 
-const darkModeToggle = document.getElementById("darkModeToggle");
-if (darkModeToggle) {
-    let isDarkMode = false;
-    try {
-        isDarkMode = localStorage.getItem("darkMode") === "true";
-    } catch (error) {
-        isDarkMode = document.body.classList.contains("dark-mode");
-    }
-
-    if (isDarkMode) {
-        document.body.classList.add("dark-mode");
-        darkModeToggle.checked = true;
-    }
-
-    darkModeToggle.addEventListener("change", () => {
-        const isChecked = darkModeToggle.checked;
-        if (isChecked) {
-            document.body.classList.add("dark-mode");
-            try {
-                localStorage.setItem("darkMode", "true");
-            } catch (error) {
-                // Ignore storage issues so the rest of the page scripts continue to run.
-            }
-        } else {
-            document.body.classList.remove("dark-mode");
-            try {
-                localStorage.setItem("darkMode", "false");
-            } catch (error) {
-                // Ignore storage issues so the rest of the page scripts continue to run.
-            }
-        }
-    });
-}
 
 const appointmentCalendar = document.getElementById("appointmentCalendar");
 if (appointmentCalendar) {

@@ -97,6 +97,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['email'] = (string) $user['email'];
                 $_SESSION['role'] = 'admin';
                 unset($_SESSION['pending_login_email']);
+                unset($_SESSION['pending_verify_debug_code']);
+                unset($_SESSION['pending_verify_debug_file']);
                 unset($_SESSION['pending_verify_debug_link']);
 
                 setFlashMessage('success', 'Admin sign in successful.');
@@ -122,7 +124,7 @@ if ($flash) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=<?php echo (int) (@filemtime(__DIR__ . '/style.css') ?: time()); ?>">
 </head>
 <body class="auth-page">
     <div class="auth-layout auth-layout-single">

@@ -29,15 +29,80 @@ function redirectTo(string $location): void
     exit();
 }
 
+function loadAppConfig(): array
+{
+    static $config = null;
+    if ($config !== null) {
+        return $config;
+    }
+
+    $config = [];
+    $configPath = __DIR__ . '/app_config.php';
+    if (is_file($configPath)) {
+        $loaded = require $configPath;
+        if (is_array($loaded)) {
+            $config = $loaded;
+        }
+    }
+
+    return $config;
+}
+
+function configuredAppBaseUrl(): string
+{
+    static $baseUrl = null;
+    if ($baseUrl !== null) {
+        return $baseUrl;
+    }
+
+    $config = loadAppConfig();
+    $candidate = trim((string) (
+        getenv('PUBLIC_BASE_URL')
+        ?: getenv('APP_BASE_URL')
+        ?: getenv('APP_URL')
+        ?: ($config['public_base_url'] ?? '')
+    ));
+
+    if ($candidate === '') {
+        $baseUrl = '';
+        return $baseUrl;
+    }
+
+    if (!preg_match('/^https?:\/\//i', $candidate)) {
+        $candidate = 'https://' . ltrim($candidate, '/');
+    }
+
+    $baseUrl = rtrim($candidate, '/');
+    return $baseUrl;
+}
+
 function appBaseUrl(): string
 {
-    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $configured = configuredAppBaseUrl();
+    if ($configured !== '') {
+        return $configured;
+    }
+
+    $forwardedProto = strtolower(trim((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')));
+    $https = (
+        $forwardedProto === 'https'
+        || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (string) ($_SERVER['SERVER_PORT'] ?? '') === '443'
+    );
     $scheme = $https ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+    $rawHost = (string) (
+        $_SERVER['HTTP_X_FORWARDED_HOST']
+        ?? $_SERVER['HTTP_HOST']
+        ?? $_SERVER['SERVER_NAME']
+        ?? 'localhost'
+    );
+    $host = trim(explode(',', $rawHost)[0] ?? 'localhost');
+
     $scriptName = $_SERVER['SCRIPT_NAME'] ?? '/NBICLEARANCE/index.php';
     $basePath = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
 
-    if ($basePath === '') {
+    if ($basePath === '' || $basePath === '.' || $basePath === '/') {
         return "{$scheme}://{$host}";
     }
 

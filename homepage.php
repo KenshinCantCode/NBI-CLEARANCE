@@ -105,6 +105,36 @@ function toTabOrDashboard(string $tab): string
     return in_array($tab, $validTabs, true) ? $tab : 'dashboard';
 }
 
+function appointmentLocationOptions(): array
+{
+    return [
+        'NBI PAVIA',
+        'NBI SAN FELIX',
+        'NBI FORT SAN PEDRO'
+    ];
+}
+
+function normalizeAppointmentLocation(string $value): string
+{
+    return strtoupper(preg_replace('/\s+/', ' ', trim($value)));
+}
+
+function resolveAppointmentLocation(string $value): string
+{
+    $normalizedValue = normalizeAppointmentLocation($value);
+    if ($normalizedValue === '') {
+        return '';
+    }
+
+    foreach (appointmentLocationOptions() as $option) {
+        if (normalizeAppointmentLocation($option) === $normalizedValue) {
+            return $option;
+        }
+    }
+
+    return '';
+}
+
 ensureUserRoleColumn($conn);
 $email = (string) $_SESSION['email'];
 $activeTab = toTabOrDashboard((string) ($_GET['tab'] ?? 'dashboard'));
@@ -206,7 +236,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbReady) {
     if ($action === 'save_appointment') {
         $appointmentDate = trim((string) ($_POST['appointment_date'] ?? ''));
         $appointmentTime = trim((string) ($_POST['appointment_time'] ?? ''));
-        $location = trim((string) ($_POST['location'] ?? ''));
+        $location = resolveAppointmentLocation((string) ($_POST['location'] ?? ''));
         $onsiteRequired = isset($_POST['onsite_required']) ? 1 : 0;
         $notes = trim((string) ($_POST['notes'] ?? ''));
 
@@ -536,10 +566,6 @@ $appointmentMeta = !empty($appointmentData)
     ? formatDateLabel((string) $appointmentData['appointment_date'], (string) $appointmentData['appointment_time'])
     : 'No appointment selected';
 
-$bodyClass = 'home-page';
-if (!empty($settings['dark_mode'])) {
-    $bodyClass .= ' dark-mode';
-}
 
 $applicationFirstName = (string) ($applicationData['first_name'] ?? $firstNameFromUser);
 $applicationMiddleName = (string) ($applicationData['middle_name'] ?? '');
@@ -555,9 +581,10 @@ $appointmentTimeValue = (string) ($appointmentData['appointment_time'] ?? '');
 if ($appointmentTimeValue !== '') {
     $appointmentTimeValue = substr($appointmentTimeValue, 0, 5);
 }
-$appointmentLocationValue = (string) ($appointmentData['location'] ?? '');
+$appointmentLocationValue = resolveAppointmentLocation((string) ($appointmentData['location'] ?? ''));
 $appointmentNotesValue = (string) ($appointmentData['notes'] ?? '');
 $appointmentOnsite = !isset($appointmentData['onsite_required']) || (int) $appointmentData['onsite_required'] === 1;
+$appointmentLocationOptions = appointmentLocationOptions();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -573,7 +600,7 @@ $appointmentOnsite = !isset($appointmentData['onsite_required']) || (int) $appoi
 </head>
 <body class="<?php echo htmlspecialchars($bodyClass); ?>">
     <div class="home-layout">
-        <aside class="sidebar" id="sidebar">
+        <aside class="sidebar" id="sidebar" aria-hidden="true">
             <div class="sidebar-brand">
                 <i class="fa-solid fa-fingerprint"></i>
                 <div>
@@ -600,7 +627,7 @@ $appointmentOnsite = !isset($appointmentData['onsite_required']) || (int) $appoi
 
         <main class="main-content">
             <header class="topbar">
-                <button id="menuToggle" class="menu-toggle" type="button" aria-label="Toggle Sidebar">
+                <button id="menuToggle" class="menu-toggle" type="button" aria-label="Open sidebar" aria-controls="sidebar" aria-expanded="false">
                     <span></span>
                     <span></span>
                     <span></span>
@@ -649,13 +676,6 @@ $appointmentOnsite = !isset($appointmentData['onsite_required']) || (int) $appoi
                     </article>
                 </section>
 
-                <section class="hero-panel">
-                    <div>
-                        <h2>Hello, <?php echo htmlspecialchars($fullName); ?></h2>
-                        <p>Use the sidebar to complete your application, choose an appointment date, and monitor notifications.</p>
-                    </div>
-                    <a href="homepage.php?tab=application" class="hero-btn">Start Application</a>
-                </section>
             <?php endif; ?>
 
             <?php if ($activeTab === 'application'): ?>
@@ -725,7 +745,12 @@ $appointmentOnsite = !isset($appointmentData['onsite_required']) || (int) $appoi
                                 </div>
                                 <div class="field">
                                     <label for="purpose">Purpose of Clearance <span class="required">*</span></label>
-                                    <input type="text" id="purpose" name="purpose" value="<?php echo htmlspecialchars($applicationPurpose); ?>" placeholder="Employment, Travel, Education, etc." required>
+                                    <select name="Purpose" id="Purpose">
+                                        <option value="Employment">Employment</option>
+                                        <option value="Education">Education</option>
+                                        <option value="Travel">Travel</option>
+                                        <option value="Personal">Personal</option>
+                                    </select>
                                 </div>
                             </div>
                         </section>
@@ -806,7 +831,14 @@ $appointmentOnsite = !isset($appointmentData['onsite_required']) || (int) $appoi
                                     </div>
                                     <div class="field">
                                         <label for="location">Location</label>
-                                        <input type="text" id="location" name="location" value="<?php echo htmlspecialchars($appointmentLocationValue); ?>" placeholder="NBI branch/location" required>
+                                        <select name="location" id="location" required>
+                                            <option value="">Select location</option>
+                                            <?php foreach ($appointmentLocationOptions as $locationOption): ?>
+                                                <option value="<?php echo htmlspecialchars($locationOption); ?>" <?php echo $appointmentLocationValue === $locationOption ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars($locationOption); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
                                 </div>
 
@@ -914,14 +946,6 @@ $appointmentOnsite = !isset($appointmentData['onsite_required']) || (int) $appoi
                         <h3 class="settings-section-title">Preferences</h3>
                         <form method="post" action="homepage.php?tab=settings" class="module-form settings-form">
                             <input type="hidden" name="action" value="save_settings">
-
-                            <label class="check-item check-item-lg">
-                                <input type="checkbox" id="darkModeToggle" name="dark_mode" value="1" <?php echo !empty($settings['dark_mode']) ? 'checked' : ''; ?>>
-                                <span>
-                                    <strong><i class="fa-solid fa-moon"></i> Dark Mode</strong>
-                                    <small>Switch to a darker theme for comfortable viewing in low-light environments.</small>
-                                </span>
-                            </label>
 
                             <label class="check-item check-item-lg">
                                 <input type="checkbox" name="email_notifications" value="1" <?php echo !empty($settings['email_notifications']) ? 'checked' : ''; ?>>

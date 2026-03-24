@@ -6,37 +6,72 @@ require_once 'mailer.php';
 
 ensureUserRoleColumn($conn);
 
-function sendLoginVerificationEmail(mysqli $conn, string $email, string $firstName, string $lastName): array
+function createLoginOtpHash(string $email, string $otp): string
+{
+    return hashToken(strtolower(trim($email)) . '|' . $otp);
+}
+
+function sendLoginOtpEmail(mysqli $conn, string $email, string $firstName, string $lastName): array
 {
     $invalidateStmt = $conn->prepare("UPDATE login_verifications SET used_at=NOW() WHERE email=? AND used_at IS NULL");
     $invalidateStmt->bind_param("s", $email);
     $invalidateStmt->execute();
     $invalidateStmt->close();
 
-    $token = createToken();
-    $tokenHash = hashToken($token);
+    $otp = '';
     $expiresAt = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+    $inserted = false;
 
-    $insertStmt = $conn->prepare("INSERT INTO login_verifications (email, token_hash, expires_at) VALUES (?, ?, ?)");
-    $insertStmt->bind_param("sss", $email, $tokenHash, $expiresAt);
-    $insertStmt->execute();
-    $insertStmt->close();
+    for ($attempt = 0; $attempt < 5; $attempt++) {
+        $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $otpHash = createLoginOtpHash($email, $otp);
+
+        $insertStmt = $conn->prepare("INSERT INTO login_verifications (email, token_hash, expires_at) VALUES (?, ?, ?)");
+        if (!$insertStmt) {
+            return [
+                'success' => false,
+                'error' => 'Unable to prepare verification request.'
+            ];
+        }
+
+        $insertStmt->bind_param("sss", $email, $otpHash, $expiresAt);
+        $inserted = $insertStmt->execute();
+        $insertStmt->close();
+
+        if ($inserted) {
+            break;
+        }
+    }
+
+    if (!$inserted) {
+        return [
+            'success' => false,
+            'error' => 'Unable to generate a one-time code right now.'
+        ];
+    }
 
     $displayName = trim($firstName . ' ' . $lastName);
     if ($displayName === '') {
         $displayName = 'User';
     }
 
-    $verifyLink = appBaseUrl() . '/verify_login.php?token=' . urlencode($token);
-    $subject = 'NBI Clearance Login Verification';
+    $subject = 'NBI Clearance Login OTP';
     $body = "
         <p>Hello {$displayName},</p>
-        <p>To complete your sign in, click the verification link below.</p>
-        <p><a href=\"{$verifyLink}\">Verify Sign In</a></p>
-        <p>This link expires in 10 minutes.</p>
+        <p>Use this one-time passcode (OTP) to complete your sign in:</p>
+        <p style=\"font-size: 28px; font-weight: 700; letter-spacing: 4px; margin: 8px 0;\">{$otp}</p>
+        <p>This code expires in 10 minutes.</p>
+        <p>If you did not request this sign in, you can ignore this email.</p>
     ";
 
-    return sendAppEmail($email, $displayName, $subject, $body);
+    $altBody = "Hello {$displayName}, your login OTP is {$otp}. It expires in 10 minutes.";
+    $mailResult = sendAppEmail($email, $displayName, $subject, $body, $altBody);
+
+    if (($mailResult['success'] ?? false) && (($mailResult['delivery'] ?? '') === 'file')) {
+        $mailResult['debug_otp'] = $otp;
+    }
+
+    return $mailResult;
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -109,7 +144,7 @@ if (isset($_POST['signIn'])) {
         redirectTo('index.php');
     }
 
-    $mailResult = sendLoginVerificationEmail(
+    $mailResult = sendLoginOtpEmail(
         $conn,
         $user['email'],
         (string) ($user['firstName'] ?? ''),
@@ -117,17 +152,23 @@ if (isset($_POST['signIn'])) {
     );
 
     if (!$mailResult['success']) {
-        setFlashMessage('error', 'Unable to send login verification email. ' . $mailResult['error']);
+        setFlashMessage('error', 'Unable to send login OTP email. ' . $mailResult['error']);
         redirectTo('index.php');
     }
 
     $_SESSION['pending_login_email'] = $user['email'];
-    if (!empty($mailResult['debug_link'])) {
-        $_SESSION['pending_verify_debug_link'] = $mailResult['debug_link'];
+    if (!empty($mailResult['debug_otp'])) {
+        $_SESSION['pending_verify_debug_code'] = (string) $mailResult['debug_otp'];
     } else {
-        unset($_SESSION['pending_verify_debug_link']);
+        unset($_SESSION['pending_verify_debug_code']);
     }
-    setFlashMessage('info', 'Verification email sent. Open your inbox to complete sign in.');
+    if (!empty($mailResult['debug_file'])) {
+        $_SESSION['pending_verify_debug_file'] = (string) $mailResult['debug_file'];
+    } else {
+        unset($_SESSION['pending_verify_debug_file']);
+    }
+    unset($_SESSION['pending_verify_debug_link']);
+    setFlashMessage('info', 'A verification OTP has been sent. Enter the code to complete sign in.');
     redirectTo('verify_login.php');
 }
 

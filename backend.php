@@ -475,7 +475,7 @@ if ($dbReady) {
 </head>
 <body class="<?php echo htmlspecialchars($bodyClass); ?>">
     <div class="home-layout backend-layout">
-        <aside class="sidebar" id="sidebar">
+        <aside class="sidebar" id="sidebar" aria-hidden="true">
             <div class="sidebar-brand">
                 <i class="fa-solid fa-shield-halved"></i>
                 <div>
@@ -500,7 +500,7 @@ if ($dbReady) {
 
         <main class="main-content">
             <header class="topbar">
-                <button id="menuToggle" class="menu-toggle" type="button" aria-label="Toggle Sidebar">
+                <button id="menuToggle" class="menu-toggle" type="button" aria-label="Open sidebar" aria-controls="sidebar" aria-expanded="false">
                     <span></span>
                     <span></span>
                     <span></span>
