@@ -96,10 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_regenerate_id(true);
                 $_SESSION['email'] = (string) $user['email'];
                 $_SESSION['role'] = 'admin';
-                unset($_SESSION['pending_login_email']);
-                unset($_SESSION['pending_verify_debug_code']);
-                unset($_SESSION['pending_verify_debug_file']);
-                unset($_SESSION['pending_verify_debug_link']);
+                clearPendingLoginVerificationState();
 
                 setFlashMessage('success', 'Admin sign in successful.');
                 redirectTo('backend.php');
@@ -127,11 +124,16 @@ if ($flash) {
     <link rel="stylesheet" href="style.css?v=<?php echo (int) (@filemtime(__DIR__ . '/style.css') ?: time()); ?>">
 </head>
 <body class="auth-page">
-    <div class="auth-layout auth-layout-single">
-        <main class="auth-panel auth-panel-full">
+
+        <main class="auth-panel">
             <div class="container">
+                <div class="auth-card-brand">
+                    <img src="assets/nbi.png" alt="" class="card-logo">
+                    <div>
+                        <p>NBI Clearance Portal</p>
+                    </div>
+                </div>
                 <h2 class="form-title">Admin Backend Login</h2>
-                <p class="form-subtitle">Sign in with an admin account to access backend controls.</p>
 
                 <?php if ($statusMessage !== ''): ?>
                     <div class="notice notice-<?php echo htmlspecialchars($statusType); ?>">
@@ -167,4 +169,9 @@ if ($flash) {
         </main>
     </div>
 </body>
+<div class="footer">
+    <div class="footer-container">
+        <p>@2026 NBI Clearance. All Right Reserved</p>
+        <p>Contact Us</p>
+    </div>
 </html>

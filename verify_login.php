@@ -5,6 +5,13 @@ require_once 'auth_helpers.php';
 require_once 'mailer.php';
 
 ensureUserRoleColumn($conn);
+$authReady = true;
+
+try {
+    ensureAuthSupportTables($conn);
+} catch (Throwable $exception) {
+    $authReady = false;
+}
 
 function maskEmail(string $email): string
 {
@@ -22,88 +29,6 @@ function maskEmail(string $email): string
     return substr($name, 0, 2) . str_repeat('*', max(1, strlen($name) - 2)) . '@' . $domain;
 }
 
-function createLoginOtpHash(string $email, string $otp): string
-{
-    return hashToken(strtolower(trim($email)) . '|' . $otp);
-}
-
-function sendLoginOtpEmail(mysqli $conn, string $email): array
-{
-    $lookupStmt = $conn->prepare("SELECT firstName, lastName FROM users WHERE email=? LIMIT 1");
-    $lookupStmt->bind_param("s", $email);
-    $lookupStmt->execute();
-    $result = $lookupStmt->get_result();
-    $user = $result->fetch_assoc();
-    $lookupStmt->close();
-
-    if (!$user) {
-        return [
-            'success' => false,
-            'error' => 'User account was not found.'
-        ];
-    }
-
-    $invalidateStmt = $conn->prepare("UPDATE login_verifications SET used_at=NOW() WHERE email=? AND used_at IS NULL");
-    $invalidateStmt->bind_param("s", $email);
-    $invalidateStmt->execute();
-    $invalidateStmt->close();
-
-    $otp = '';
-    $expiresAt = date('Y-m-d H:i:s', strtotime('+10 minutes'));
-    $inserted = false;
-
-    for ($attempt = 0; $attempt < 5; $attempt++) {
-        $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $otpHash = createLoginOtpHash($email, $otp);
-
-        $insertStmt = $conn->prepare("INSERT INTO login_verifications (email, token_hash, expires_at) VALUES (?, ?, ?)");
-        if (!$insertStmt) {
-            return [
-                'success' => false,
-                'error' => 'Unable to prepare verification request.'
-            ];
-        }
-
-        $insertStmt->bind_param("sss", $email, $otpHash, $expiresAt);
-        $inserted = $insertStmt->execute();
-        $insertStmt->close();
-
-        if ($inserted) {
-            break;
-        }
-    }
-
-    if (!$inserted) {
-        return [
-            'success' => false,
-            'error' => 'Unable to generate a one-time code right now.'
-        ];
-    }
-
-    $displayName = trim(($user['firstName'] ?? '') . ' ' . ($user['lastName'] ?? ''));
-    if ($displayName === '') {
-        $displayName = 'User';
-    }
-
-    $subject = 'NBI Clearance Login OTP';
-    $body = "
-        <p>Hello {$displayName},</p>
-        <p>Use this one-time passcode (OTP) to complete your sign in:</p>
-        <p style=\"font-size: 28px; font-weight: 700; letter-spacing: 4px; margin: 8px 0;\">{$otp}</p>
-        <p>This code expires in 10 minutes.</p>
-        <p>If you did not request this sign in, you can ignore this email.</p>
-    ";
-
-    $altBody = "Hello {$displayName}, your login OTP is {$otp}. It expires in 10 minutes.";
-    $mailResult = sendAppEmail($email, $displayName, $subject, $body, $altBody);
-
-    if (($mailResult['success'] ?? false) && (($mailResult['delivery'] ?? '') === 'file')) {
-        $mailResult['debug_otp'] = $otp;
-    }
-
-    return $mailResult;
-}
-
 $statusType = 'info';
 $statusMessage = 'Check your email for the one-time passcode.';
 $pendingEmail = (string) ($_SESSION['pending_login_email'] ?? '');
@@ -116,7 +41,12 @@ if ($flash) {
     $statusMessage = (string) ($flash['message'] ?? $statusMessage);
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify'])) {
+if (!$authReady) {
+    $statusType = 'error';
+    $statusMessage = 'Unable to initialize login verification right now.';
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $authReady && isset($_POST['verify'])) {
     if ($pendingEmail === '') {
         $statusType = 'error';
         $statusMessage = 'No pending login was found. Please sign in again.';
@@ -171,10 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify'])) {
                         session_regenerate_id(true);
                         $_SESSION['email'] = (string) $record['email'];
                         $_SESSION['role'] = getUserRole($conn, (string) $record['email']);
-                        unset($_SESSION['pending_login_email']);
-                        unset($_SESSION['pending_verify_debug_code']);
-                        unset($_SESSION['pending_verify_debug_file']);
-                        unset($_SESSION['pending_verify_debug_link']);
+                        clearPendingLoginVerificationState();
                         if ($_SESSION['role'] === 'admin') {
                             redirectTo('backend.php');
                         }
@@ -187,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify'])) {
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['resend'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $authReady && isset($_POST['resend'])) {
     if ($pendingEmail === '') {
         $statusType = 'error';
         $statusMessage = 'No pending login was found. Please sign in again.';
@@ -196,19 +123,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['resend'])) {
         if ($mailResult['success']) {
             $statusType = 'success';
             $statusMessage = 'A new OTP has been sent to your email.';
-            $devVerifyCode = (string) ($mailResult['debug_otp'] ?? '');
-            $devMailFile = (string) ($mailResult['debug_file'] ?? '');
-            if ($devVerifyCode !== '') {
-                $_SESSION['pending_verify_debug_code'] = $devVerifyCode;
-            } else {
-                unset($_SESSION['pending_verify_debug_code']);
-            }
-            if ($devMailFile !== '') {
-                $_SESSION['pending_verify_debug_file'] = $devMailFile;
-            } else {
-                unset($_SESSION['pending_verify_debug_file']);
-            }
-            unset($_SESSION['pending_verify_debug_link']);
+            syncPendingLoginDebugState($mailResult);
+            $devVerifyCode = (string) ($_SESSION['pending_verify_debug_code'] ?? '');
+            $devMailFile = (string) ($_SESSION['pending_verify_debug_file'] ?? '');
         } else {
             $statusType = 'error';
             $statusMessage = 'Unable to send OTP email. ' . $mailResult['error'];
@@ -229,9 +146,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['resend'])) {
     <link rel="stylesheet" href="style.css?v=<?php echo (int) (@filemtime(__DIR__ . '/style.css') ?: time()); ?>">
 </head>
 <body class="auth-page">
-    <div class="auth-layout auth-layout-single">
-        <main class="auth-panel auth-panel-full">
+    <div class="auth-layout">
+        <aside class="auth-visual">
+            <div class="auth-brand">
+                <img src="assets/nbi.png" alt="NBI Clearance Portal logo" class="brand-logo">
+                <div>
+                    <p class="auth-brand-kicker">Two-Step Verification</p>
+                    <strong>National Bureau of Investigation</strong>
+                    <span>Secure citizen sign in</span>
+                </div>
+            </div>
+            <p class="eyebrow">Verify Access</p>
+            <h1>Enter the one-time passcode sent to your email to continue to the portal.</h1>
+        </aside>
+
+        <main class="auth-panel">
             <div class="container">
+                <div class="auth-card-brand">
+                    <img src="assets/nbi.png" alt="" class="card-logo">
+                    <div>
+                        <p>NBI Clearance Portal</p>
+                        <span>Account verification</span>
+                    </div>
+                </div>
                 <h2 class="form-title">Verify Sign In</h2>
                 <p class="form-subtitle">
                     <?php if ($pendingEmail !== ''): ?>
@@ -287,4 +224,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['resend'])) {
         </main>
     </div>
 </body>
+<div class="footer">
+    <div class="footer-container">
+        <p>@2026 NBI Clearance. All Right Reserved</p>
+        <p>Contact Us</p>
+    </div>
+</div>
 </html>

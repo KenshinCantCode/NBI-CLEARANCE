@@ -50,7 +50,6 @@ function ensureHomepageTables(mysqli $conn): void
         "CREATE TABLE IF NOT EXISTS nbi_user_settings (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             email VARCHAR(255) NOT NULL UNIQUE,
-            dark_mode TINYINT(1) NOT NULL DEFAULT 0,
             email_notifications TINYINT(1) NOT NULL DEFAULT 1,
             onsite_notifications TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -384,15 +383,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbReady) {
     }
 
     if ($action === 'save_settings') {
-        $darkMode = isset($_POST['dark_mode']) ? 1 : 0;
         $emailNotifications = isset($_POST['email_notifications']) ? 1 : 0;
         $onsiteNotifications = isset($_POST['onsite_notifications']) ? 1 : 0;
 
         $saveStmt = $conn->prepare(
-            "INSERT INTO nbi_user_settings (email, dark_mode, email_notifications, onsite_notifications)
-             VALUES (?, ?, ?, ?)
+            "INSERT INTO nbi_user_settings (email, email_notifications, onsite_notifications)
+             VALUES (?, ?, ?)
              ON DUPLICATE KEY UPDATE
-                dark_mode=VALUES(dark_mode),
                 email_notifications=VALUES(email_notifications),
                 onsite_notifications=VALUES(onsite_notifications),
                 updated_at=CURRENT_TIMESTAMP"
@@ -403,7 +400,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbReady) {
             redirectTo('homepage.php?tab=settings');
         }
 
-        $saveStmt->bind_param("siii", $email, $darkMode, $emailNotifications, $onsiteNotifications);
+        $saveStmt->bind_param("sii", $email, $emailNotifications, $onsiteNotifications);
         $saveStmt->execute();
         $saveStmt->close();
 
@@ -453,8 +450,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbReady) {
             redirectTo('homepage.php?tab=settings');
         }
 
-        $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
-        $updateStmt = $conn->prepare("UPDATE users SET password=?, updated_at=CURRENT_TIMESTAMP WHERE email=?");
+        $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+        $updateStmt = $conn->prepare("UPDATE users SET password=? WHERE email=?");
         if (!$updateStmt) {
             setFlashMessage('error', 'Unable to update password right now.');
             redirectTo('homepage.php?tab=settings');
@@ -492,7 +489,6 @@ $applicationData = [];
 $appointmentData = [];
 $notifications = [];
 $settings = [
-    'dark_mode' => 0,
     'email_notifications' => 1,
     'onsite_notifications' => 1
 ];
@@ -517,7 +513,7 @@ if ($dbReady) {
         $appointmentStmt->close();
     }
 
-    $settingsStmt = $conn->prepare("SELECT dark_mode, email_notifications, onsite_notifications FROM nbi_user_settings WHERE email=? LIMIT 1");
+    $settingsStmt = $conn->prepare("SELECT email_notifications, onsite_notifications FROM nbi_user_settings WHERE email=? LIMIT 1");
     if ($settingsStmt) {
         $settingsStmt->bind_param("s", $email);
         $settingsStmt->execute();
@@ -557,7 +553,7 @@ $tabDescriptions = [
     'application' => 'Complete or update your application details.',
     'appointment' => 'Choose your preferred schedule for processing.',
     'notifications' => 'Track reminders and important updates.',
-    'settings' => 'Manage theme and notification preferences.'
+    'settings' => 'Manage notification preferences and account security.'
 ];
 $profileStatus = !empty($applicationData) ? 'Ready' : 'Needs details';
 $applicationStatus = !empty($applicationData['status']) ? (string) $applicationData['status'] : 'Not Started';
@@ -585,13 +581,14 @@ $appointmentLocationValue = resolveAppointmentLocation((string) ($appointmentDat
 $appointmentNotesValue = (string) ($appointmentData['notes'] ?? '');
 $appointmentOnsite = !isset($appointmentData['onsite_required']) || (int) $appointmentData['onsite_required'] === 1;
 $appointmentLocationOptions = appointmentLocationOptions();
+$bodyClass = 'home-page';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Homepage</title>
+    <title>Citizen Portal | NBI Clearance</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -602,10 +599,10 @@ $appointmentLocationOptions = appointmentLocationOptions();
     <div class="home-layout">
         <aside class="sidebar" id="sidebar" aria-hidden="true">
             <div class="sidebar-brand">
-                <i class="fa-solid fa-fingerprint"></i>
-                <div>
-                    <p>NBI</p>
-                    <span>Clearance Portal</span>
+                <img src="assets/nbi.png" alt="NBI Clearance Portal logo" class="sidebar-brand-mark">
+                <div class="sidebar-brand-copy">
+                    <p>NBI Clearance</p>
+                    <span>Citizen Services Portal</span>
                 </div>
             </div>
 
@@ -637,7 +634,7 @@ $appointmentLocationOptions = appointmentLocationOptions();
                     <p><?php echo htmlspecialchars($tabDescriptions[$activeTab]); ?></p>
                 </div>
                 <div class="topbar-right">
-                    <span class="status-pill"><i class="fa-solid fa-circle"></i> Active</span>
+                    <span class="status-pill"><i class="fa-solid fa-circle"></i> Official Portal</span>
                     <div class="user-chip"><?php echo strtoupper(substr($fullName, 0, 1)); ?></div>
                 </div>
             </header>
@@ -679,9 +676,9 @@ $appointmentLocationOptions = appointmentLocationOptions();
             <?php endif; ?>
 
             <?php if ($activeTab === 'application'): ?>
-                <section class="module-panel application-panel">
+                <section class="module-panel">
                     <div class="application-intro">
-                        <div class="application-intro-copy">
+                        <div>
                             <h2>NBI Clearance Application</h2>
                             <p class="module-copy">Fill out all required fields and review details before saving.</p>
                         </div>
@@ -745,11 +742,13 @@ $appointmentLocationOptions = appointmentLocationOptions();
                                 </div>
                                 <div class="field">
                                     <label for="purpose">Purpose of Clearance <span class="required">*</span></label>
-                                    <select name="Purpose" id="Purpose">
-                                        <option value="Employment">Employment</option>
-                                        <option value="Education">Education</option>
-                                        <option value="Travel">Travel</option>
-                                        <option value="Personal">Personal</option>
+                                    <select name="purpose" id="purpose" required>
+                                        <option value="">Select purpose</option>
+                                        <?php foreach (['Employment', 'Education', 'Travel', 'Personal'] as $purposeOption): ?>
+                                            <option value="<?php echo htmlspecialchars($purposeOption); ?>" <?php echo $applicationPurpose === $purposeOption ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($purposeOption); ?>
+                                            </option>
+                                        <?php endforeach; ?>
                                     </select>
                                 </div>
                             </div>
@@ -782,7 +781,7 @@ $appointmentLocationOptions = appointmentLocationOptions();
             <?php endif; ?>
 
             <?php if ($activeTab === 'appointment'): ?>
-                <section class="module-panel appointment-panel">
+                <section class="module-panel">
                     <h2>Appointment Schedule</h2>
                     <p class="module-copy">Choose a weekday schedule. Saturdays and Sundays are blocked, and available time is only from 9:00 AM to 5:00 PM.</p>
 
@@ -939,12 +938,11 @@ $appointmentLocationOptions = appointmentLocationOptions();
             <?php if ($activeTab === 'settings'): ?>
                 <section class="module-panel">
                     <h2>Settings & Security</h2>
-                    <p class="module-copy">Manage your account preferences, theme, and security settings.</p>
+                    <p class="module-copy">Manage your notification preferences and account security settings.</p>
                     
-                    <!-- Preferences Section -->
                     <div class="settings-section">
                         <h3 class="settings-section-title">Preferences</h3>
-                        <form method="post" action="homepage.php?tab=settings" class="module-form settings-form">
+                        <form method="post" action="homepage.php?tab=settings" class="module-form">
                             <input type="hidden" name="action" value="save_settings">
 
                             <label class="check-item check-item-lg">
@@ -969,7 +967,7 @@ $appointmentLocationOptions = appointmentLocationOptions();
 
                     <div class="settings-section">
                         <h3 class="settings-section-title">Change Password</h3>
-                        <form method="post" action="homepage.php?tab=settings" class="module-form settings-form" id="changePasswordForm">
+                        <form method="post" action="homepage.php?tab=settings" class="module-form" id="changePasswordForm">
                             <input type="hidden" name="action" value="change_password">
 
                             <div class="field">
@@ -997,4 +995,9 @@ $appointmentLocationOptions = appointmentLocationOptions();
     </div>
     <script src="script.js?v=<?php echo (int) (@filemtime(__DIR__ . '/script.js') ?: time()); ?>"></script>
 </body>
+<div class="footer">
+    <div class="footer-container">
+        <p>@2026 NBI Clearance. All Right Reserved</p>
+        <p>Contact Us</p>
+    </div>
 </html>

@@ -59,7 +59,6 @@ function ensureBackendTables(mysqli $conn): void
         "CREATE TABLE IF NOT EXISTS nbi_user_settings (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             email VARCHAR(255) NOT NULL UNIQUE,
-            dark_mode TINYINT(1) NOT NULL DEFAULT 0,
             email_notifications TINYINT(1) NOT NULL DEFAULT 1,
             onsite_notifications TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -285,7 +284,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbReady) {
 }
 
 $viewerName = 'Admin';
-$viewerDarkMode = 0;
 
 $viewerStmt = $conn->prepare("SELECT firstName, lastName FROM users WHERE email=? LIMIT 1");
 if ($viewerStmt) {
@@ -302,33 +300,15 @@ if ($viewerStmt) {
     $viewerStmt->close();
 }
 
-if ($dbReady) {
-    $viewerSettingStmt = $conn->prepare("SELECT dark_mode FROM nbi_user_settings WHERE email=? LIMIT 1");
-    if ($viewerSettingStmt) {
-        $viewerSettingStmt->bind_param("s", $viewerEmail);
-        $viewerSettingStmt->execute();
-        $viewerSettingResult = $viewerSettingStmt->get_result();
-        $viewerSettingRow = $viewerSettingResult->fetch_assoc();
-        if ($viewerSettingRow) {
-            $viewerDarkMode = (int) ($viewerSettingRow['dark_mode'] ?? 0);
-        }
-        $viewerSettingStmt->close();
-    }
-}
-
 $flash = pullFlashMessage();
 $bodyClass = 'home-page backend-page';
-if ($viewerDarkMode === 1) {
-    $bodyClass .= ' dark-mode';
-}
 
 $stats = [
     'users_total' => 0,
     'applications_total' => 0,
     'applications_pending' => 0,
     'appointments_upcoming' => 0,
-    'notifications_unread' => 0,
-    'dark_mode_users' => 0
+    'notifications_unread' => 0
 ];
 
 $recentApplications = [];
@@ -346,7 +326,6 @@ if ($dbReady) {
     $stats['applications_pending'] = countRows($conn, "SELECT COUNT(*) AS total FROM nbi_applications WHERE status IN ('Submitted', 'Under Review', 'For Biometrics')");
     $stats['appointments_upcoming'] = countRows($conn, "SELECT COUNT(*) AS total FROM nbi_appointments WHERE appointment_date >= CURDATE() AND status IN ('Scheduled', 'Rescheduled')");
     $stats['notifications_unread'] = countRows($conn, "SELECT COUNT(*) AS total FROM nbi_notifications WHERE is_read=0");
-    $stats['dark_mode_users'] = countRows($conn, "SELECT COUNT(*) AS total FROM nbi_user_settings WHERE dark_mode=1");
 
     if ($activeTab === 'overview') {
         $recentAppQuery = $conn->query(
@@ -443,7 +422,6 @@ if ($dbReady) {
                 u.lastName,
                 COALESCE(a.status, 'No Application') AS application_status,
                 COALESCE(ap.status, 'No Appointment') AS appointment_status,
-                COALESCE(s.dark_mode, 0) AS dark_mode,
                 COALESCE(s.email_notifications, 1) AS email_notifications,
                 COALESCE(s.onsite_notifications, 1) AS onsite_notifications
              FROM users u
@@ -466,7 +444,7 @@ if ($dbReady) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backend Dashboard</title>
+    <title>Backend Operations | NBI Clearance</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -474,13 +452,13 @@ if ($dbReady) {
     <link rel="stylesheet" href="style.css?v=<?php echo (int) (@filemtime(__DIR__ . '/style.css') ?: time()); ?>">
 </head>
 <body class="<?php echo htmlspecialchars($bodyClass); ?>">
-    <div class="home-layout backend-layout">
+    <div class="home-layout">
         <aside class="sidebar" id="sidebar" aria-hidden="true">
             <div class="sidebar-brand">
-                <i class="fa-solid fa-shield-halved"></i>
-                <div>
-                    <p>NBI</p>
-                    <span>Backend Control</span>
+                <img src="assets/nbi.png" alt="NBI Clearance Portal logo" class="sidebar-brand-mark">
+                <div class="sidebar-brand-copy">
+                    <p>NBI Clearance</p>
+                    <span>Backend Operations Center</span>
                 </div>
             </div>
 
@@ -510,7 +488,7 @@ if ($dbReady) {
                     <p><?php echo htmlspecialchars($tabDescriptions[$activeTab]); ?> Signed in as <?php echo htmlspecialchars($viewerName); ?>.</p>
                 </div>
                 <div class="topbar-right">
-                    <span class="status-pill"><i class="fa-solid fa-circle"></i> Backend Online</span>
+                    <span class="status-pill"><i class="fa-solid fa-circle"></i> Official Backend</span>
                     <div class="user-chip"><?php echo strtoupper(substr($viewerName, 0, 1)); ?></div>
                 </div>
             </header>
@@ -551,7 +529,7 @@ if ($dbReady) {
                         <i class="fa-solid fa-bell card-icon"></i>
                         <p class="card-label">Unread Notifications</p>
                         <h3><?php echo (int) $stats['notifications_unread']; ?></h3>
-                        <span class="card-meta"><?php echo (int) $stats['dark_mode_users']; ?> users on dark mode</span>
+                        <span class="card-meta">Pending user alerts that still need attention</span>
                     </article>
                 </section>
 
@@ -874,7 +852,6 @@ if ($dbReady) {
                                         <th>Email</th>
                                         <th>Application</th>
                                         <th>Appointment</th>
-                                        <th>Dark Mode</th>
                                         <th>Email Notif</th>
                                         <th>On-site Notif</th>
                                     </tr>
@@ -887,7 +864,6 @@ if ($dbReady) {
                                             <td><?php echo htmlspecialchars((string) $row['email']); ?></td>
                                             <td><span class="status-chip status-<?php echo htmlspecialchars(statusClass((string) $row['application_status'])); ?>"><?php echo htmlspecialchars((string) $row['application_status']); ?></span></td>
                                             <td><span class="status-chip status-<?php echo htmlspecialchars(statusClass((string) $row['appointment_status'])); ?>"><?php echo htmlspecialchars((string) $row['appointment_status']); ?></span></td>
-                                            <td><?php echo (int) $row['dark_mode'] === 1 ? 'On' : 'Off'; ?></td>
                                             <td><?php echo (int) $row['email_notifications'] === 1 ? 'On' : 'Off'; ?></td>
                                             <td><?php echo (int) $row['onsite_notifications'] === 1 ? 'On' : 'Off'; ?></td>
                                         </tr>
@@ -902,4 +878,9 @@ if ($dbReady) {
     </div>
     <script src="script.js?v=<?php echo (int) (@filemtime(__DIR__ . '/script.js') ?: time()); ?>"></script>
 </body>
+<div class="footer">
+    <div class="footer-container">
+        <p>@2026 NBI Clearance. All Right Reserved</p>
+        <p>Contact Us</p>
+    </div>
 </html>

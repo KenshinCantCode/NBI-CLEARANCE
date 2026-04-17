@@ -15,6 +15,44 @@ if (signUpButton && signInButton && signInForm && signUpForm) {
     });
 }
 
+const signUpSubmitForm = document.querySelector('#signup form');
+const signUpPasswordInput = document.getElementById("signupPassword");
+const signUpConfirmPasswordInput = document.getElementById("signupConfirmPassword");
+
+if (signUpSubmitForm && signUpPasswordInput && signUpConfirmPasswordInput) {
+    const validateSignUpPasswords = () => {
+        if (signUpPasswordInput.value && signUpPasswordInput.value.length < 8) {
+            signUpPasswordInput.setCustomValidity("Password must be at least 8 characters long.");
+        } else {
+            signUpPasswordInput.setCustomValidity("");
+        }
+
+        if (signUpConfirmPasswordInput.value && signUpPasswordInput.value !== signUpConfirmPasswordInput.value) {
+            signUpConfirmPasswordInput.setCustomValidity("Passwords do not match.");
+        } else {
+            signUpConfirmPasswordInput.setCustomValidity("");
+        }
+    };
+
+    signUpPasswordInput.addEventListener("input", validateSignUpPasswords);
+    signUpConfirmPasswordInput.addEventListener("input", validateSignUpPasswords);
+
+    signUpSubmitForm.addEventListener("submit", (event) => {
+        validateSignUpPasswords();
+
+        if (signUpPasswordInput.checkValidity() && signUpConfirmPasswordInput.checkValidity()) {
+            return;
+        }
+
+        event.preventDefault();
+        if (!signUpPasswordInput.checkValidity()) {
+            signUpPasswordInput.reportValidity();
+        } else {
+            signUpConfirmPasswordInput.reportValidity();
+        }
+    });
+}
+
 const menuToggle = document.getElementById("menuToggle");
 const sidebar = document.getElementById("sidebar");
 const overlay = document.getElementById("overlay");

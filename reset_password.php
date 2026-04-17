@@ -8,34 +8,48 @@ $statusType = '';
 $statusMessage = '';
 $tokenValid = false;
 $tokenRecord = null;
+$authReady = true;
 
-if ($token === '') {
+try {
+    ensureAuthSupportTables($conn);
+} catch (Throwable $exception) {
+    $authReady = false;
+    $statusType = 'error';
+    $statusMessage = 'Unable to initialize password reset right now. ' . $exception->getMessage();
+}
+
+if ($authReady && $token === '') {
     $statusType = 'error';
     $statusMessage = 'The password reset link is invalid.';
-} else {
+} elseif ($authReady) {
     $tokenHash = hashToken($token);
     $tokenStmt = $conn->prepare("SELECT id, email, expires_at, used_at FROM password_resets WHERE token_hash=? LIMIT 1");
-    $tokenStmt->bind_param("s", $tokenHash);
-    $tokenStmt->execute();
-    $tokenResult = $tokenStmt->get_result();
-    $tokenRecord = $tokenResult->fetch_assoc();
-    $tokenStmt->close();
-
-    if (!$tokenRecord) {
+    if (!$tokenStmt) {
         $statusType = 'error';
-        $statusMessage = 'The password reset link is invalid.';
-    } elseif (!empty($tokenRecord['used_at'])) {
-        $statusType = 'error';
-        $statusMessage = 'This password reset link has already been used.';
-    } elseif (strtotime((string) $tokenRecord['expires_at']) <= time()) {
-        $statusType = 'error';
-        $statusMessage = 'This password reset link has expired.';
+        $statusMessage = 'Unable to verify the password reset link right now.';
     } else {
-        $tokenValid = true;
+        $tokenStmt->bind_param("s", $tokenHash);
+        $tokenStmt->execute();
+        $tokenResult = $tokenStmt->get_result();
+        $tokenRecord = $tokenResult->fetch_assoc();
+        $tokenStmt->close();
+
+        if (!$tokenRecord) {
+            $statusType = 'error';
+            $statusMessage = 'The password reset link is invalid.';
+        } elseif (!empty($tokenRecord['used_at'])) {
+            $statusType = 'error';
+            $statusMessage = 'This password reset link has already been used.';
+        } elseif (strtotime((string) $tokenRecord['expires_at']) <= time()) {
+            $statusType = 'error';
+            $statusMessage = 'This password reset link has expired.';
+        } else {
+            $tokenValid = true;
+        }
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid && $tokenRecord) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $authReady && $tokenValid && $tokenRecord) {
     $newPassword = $_POST['password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
 
@@ -48,24 +62,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid && $tokenRecord) {
     } else {
         $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
         $email = $tokenRecord['email'];
-
         $updatePassStmt = $conn->prepare("UPDATE users SET password=? WHERE email=?");
-        $updatePassStmt->bind_param("ss", $newHash, $email);
-        $updatePassStmt->execute();
-        $updatePassStmt->close();
-
         $consumeStmt = $conn->prepare("UPDATE password_resets SET used_at=NOW() WHERE id=?");
-        $consumeStmt->bind_param("i", $tokenRecord['id']);
-        $consumeStmt->execute();
-        $consumeStmt->close();
-
         $revokeLoginStmt = $conn->prepare("UPDATE login_verifications SET used_at=NOW() WHERE email=? AND used_at IS NULL");
-        $revokeLoginStmt->bind_param("s", $email);
-        $revokeLoginStmt->execute();
-        $revokeLoginStmt->close();
 
-        setFlashMessage('success', 'Password reset successful. Please sign in with your new password.');
-        redirectTo('index.php');
+        if (!$updatePassStmt || !$consumeStmt || !$revokeLoginStmt) {
+            $statusType = 'error';
+            $statusMessage = 'Unable to update your password right now.';
+            if ($updatePassStmt) {
+                $updatePassStmt->close();
+            }
+            if ($consumeStmt) {
+                $consumeStmt->close();
+            }
+            if ($revokeLoginStmt) {
+                $revokeLoginStmt->close();
+            }
+        } else {
+            $tokenId = (int) $tokenRecord['id'];
+            $resetApplied = false;
+            $conn->begin_transaction();
+
+            $updatePassStmt->bind_param("ss", $newHash, $email);
+            $updated = $updatePassStmt->execute();
+            $passwordChanged = $updated && $updatePassStmt->affected_rows === 1;
+            $updatePassStmt->close();
+
+            if ($passwordChanged) {
+                $consumeStmt->bind_param("i", $tokenId);
+                $tokenConsumed = $consumeStmt->execute() && $consumeStmt->affected_rows === 1;
+                $consumeStmt->close();
+
+                $revokeLoginStmt->bind_param("s", $email);
+                $verificationsRevoked = $revokeLoginStmt->execute();
+                $revokeLoginStmt->close();
+
+                if ($tokenConsumed && $verificationsRevoked) {
+                    $conn->commit();
+                    $resetApplied = true;
+                } else {
+                    $conn->rollback();
+                }
+            } else {
+                $consumeStmt->close();
+                $revokeLoginStmt->close();
+                $conn->rollback();
+            }
+
+            if (!$resetApplied) {
+                $statusType = 'error';
+                $statusMessage = 'Unable to update your password right now.';
+            } else {
+                setFlashMessage('success', 'Password reset successful. Please sign in with your new password.');
+                redirectTo('index.php');
+            }
+        }
     }
 }
 ?>
@@ -82,9 +133,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid && $tokenRecord) {
     <link rel="stylesheet" href="style.css?v=<?php echo (int) (@filemtime(__DIR__ . '/style.css') ?: time()); ?>">
 </head>
 <body class="auth-page">
-    <div class="auth-layout auth-layout-single">
-        <main class="auth-panel auth-panel-full">
+    <div class="auth-layout">
+        <aside class="auth-visual">
+            <div class="auth-brand">
+                <img src="assets/nbi.png" alt="NBI Clearance Portal logo" class="brand-logo">
+                <div>
+                    <strong>National Bureau of Investigation</strong>
+                </div>
+            </div>
+            <p class="eyebrow">Reset Credentials</p>
+            <h1>Create a new password and restore secure access to your clearance portal.</h1>
+        </aside>
+
+        <main class="index-panel">
             <div class="container">
+                <div class="auth-card-brand">
+                    <img src="assets/nbi.png" alt="" class="card-logo">
+                    <div>
+                        <p>NBI Clearance Portal</p>
+                        <span>Secure password reset</span>
+                    </div>
+                </div>
                 <h2 class="form-title">Reset Password</h2>
                 <p class="form-subtitle">Create a new password for your account.</p>
 
@@ -124,4 +193,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid && $tokenRecord) {
         </main>
     </div>
 </body>
+<div class="footer">
+    <div class="footer-container">
+        <p>@2026 NBI Clearance. All Right Reserved</p>
+        <p>Contact Us</p>
+    </div>
 </html>

@@ -15,16 +15,30 @@ $showSignUp = (isset($_GET['form']) && $_GET['form'] === 'signup');
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=<?php echo (int) (@filemtime(__DIR__ . '/style.css') ?: time()); ?>">
 </head>
-<body class="auth-page">
+<body class="auth-page index-page">
     <div class="auth-layout">
         <aside class="auth-visual">
-            <p class="eyebrow">National Bureau of Investigation</p>
-            <h1>Clearance System Portal</h1>
-            <p class="auth-copy">Access your account to manage your NBI clearance application in a secure and streamlined workspace.</p>
+            <div class="auth-brand">
+                <img src="assets/nbi.png" alt="NBI Clearance Portal logo" class="brand-logo">
+                <div>
+                    <p class="auth-brand-kicker">Republic of the Philippines</p>
+                    <strong>National Bureau of Investigation</strong>
+                </div>
+            </div>
+            <p class="eyebrow">Online Application and Appointment System</p>
+            <h1>Track and Manage Your Application and Appointment</h1>
+            <p class="auth-copy">Easy Access On Application and Appointment</p>
         </aside>
 
-        <main class="auth-panel">
+        <main class="index-panel">
             <div class="container" id="signup" style="display:<?php echo $showSignUp ? 'block' : 'none'; ?>;">
+              <div class="auth-card-brand">
+                <img src="assets/nbi.png" alt="" class="card-logo">
+                <div>
+                    <p>NBI Clearance Portal</p>
+                    <span>Citizen registration</span>
+                </div>
+              </div>
               <h2 class="form-title">Create Account</h2>
               <p class="form-subtitle">Set up your account to begin your application.</p>
               <?php if ($flash && $showSignUp): ?>
@@ -53,6 +67,11 @@ $showSignUp = (isset($_GET['form']) && $_GET['form'] === 'signup');
                     <input type="password" name="password" id="signupPassword" placeholder="Password" required>
                     <label for="signupPassword">Password</label>
                 </div>
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" name="confirm_password" id="signupConfirmPassword" placeholder="Confirm Password" required>
+                    <label for="signupConfirmPassword">Confirm Password</label>
+                </div>
                <input type="submit" class="btn" value="Sign Up" name="signUp">
               </form>
               <div class="links">
@@ -62,6 +81,13 @@ $showSignUp = (isset($_GET['form']) && $_GET['form'] === 'signup');
             </div>
 
             <div class="container" id="signIn" style="display:<?php echo $showSignUp ? 'none' : 'block'; ?>;">
+                <div class="auth-card-brand">
+                    <img src="assets/nbi.png" alt="" class="card-logo">
+                    <div>
+                        <p>NBI Clearance Portal</p>
+                        <span>Citizen sign in</span>
+                    </div>
+                </div>
                 <h2 class="form-title">Welcome Back</h2>
                 <p class="form-subtitle">Sign in to continue to your dashboard.</p>
                 <?php if ($flash && !$showSignUp): ?>
@@ -98,4 +124,9 @@ $showSignUp = (isset($_GET['form']) && $_GET['form'] === 'signup');
     </div>
     <script src="script.js?v=<?php echo (int) (@filemtime(__DIR__ . '/script.js') ?: time()); ?>"></script>
 </body>
+<div class="footer">
+    <div class="footer-container">
+        <p>@2026 NBI Clearance. All Right Reserved</p>
+        <p>Contact Us</p>
+    </div>
 </html>
