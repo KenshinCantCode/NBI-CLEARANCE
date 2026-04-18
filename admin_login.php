@@ -168,10 +168,6 @@ if ($flash) {
             </div>
         </main>
     </div>
+    <?php include 'footer.php'; ?>
 </body>
-<div class="footer">
-    <div class="footer-container">
-        <p>@2026 NBI Clearance. All Right Reserved</p>
-        <p>Contact Us</p>
-    </div>
 </html>

@@ -877,10 +877,6 @@ if ($dbReady) {
         </main>
     </div>
     <script src="script.js?v=<?php echo (int) (@filemtime(__DIR__ . '/script.js') ?: time()); ?>"></script>
+    <?php include 'footer.php'; ?>
 </body>
-<div class="footer">
-    <div class="footer-container">
-        <p>@2026 NBI Clearance. All Right Reserved</p>
-        <p>Contact Us</p>
-    </div>
 </html>
