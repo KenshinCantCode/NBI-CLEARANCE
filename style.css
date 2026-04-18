@@ -2314,6 +2314,39 @@ a:hover {
     }
 }
 
+@media (max-width: 992px) {
+    .sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        width: min(85vw, 280px) !important;
+        max-width: 280px !important;
+        margin: 0 !important;
+        padding: 1.25rem !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+        background: linear-gradient(180deg, #0c326f 0%, #091e44 100%) !important;
+        box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.12) !important;
+        transform: translateX(-100%) !important;
+        transition: transform 0.3s ease !important;
+        z-index: 1055 !important;
+        height: 100vh !important;
+    }
+
+    .home-layout.sidebar-open .sidebar,
+    .sidebar.show {
+        transform: translateX(0) !important;
+    }
+
+    .overlay {
+        z-index: 1045 !important;
+    }
+
+    .topbar {
+        z-index: 1030 !important;
+    }
+}
+
 .footer {
     margin-top: auto;
     background: linear-gradient(180deg, #0c326f 0%, #091e44 100%);
