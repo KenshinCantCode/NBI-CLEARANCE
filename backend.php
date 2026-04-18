@@ -488,7 +488,8 @@ if ($dbReady) {
                     <p><?php echo htmlspecialchars($tabDescriptions[$activeTab]); ?> Signed in as <?php echo htmlspecialchars($viewerName); ?>.</p>
                 </div>
                 <div class="topbar-right">
-                    <span class="status-pill"><i class="fa-solid fa-circle"></i> Official Backend</span>
+                    <span class="status-pill active"><i class="fa-solid fa-circle"></i> Active</span>
+                    <span class="backend-label">Official Backend</span>
                     <div class="user-chip"><?php echo strtoupper(substr($viewerName, 0, 1)); ?></div>
                 </div>
             </header>

@@ -145,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $authReady && isset($_POST['resend'
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=<?php echo (int) (@filemtime(__DIR__ . '/style.css') ?: time()); ?>">
 </head>
-<body class="auth-page">
+<body class="auth-page index-page">
     <div class="auth-layout">
         <aside class="auth-visual">
             <div class="auth-brand">
@@ -160,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $authReady && isset($_POST['resend'
             <h1>Enter the one-time passcode sent to your email to continue to the portal.</h1>
         </aside>
 
-        <main class="auth-panel">
+        <main class="index-panel">
             <div class="container">
                 <div class="auth-card-brand">
                     <img src="assets/nbi.png" alt="" class="card-logo">

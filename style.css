@@ -645,6 +645,58 @@ body.menu-open {
     gap: 0.75rem;
 }
 
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: var(--app-success);
+    color: white;
+    border: 1px solid var(--app-success);
+}
+
+.status-pill.active {
+    background: transparent;
+    color: var(--app-success);
+    border-color: var(--app-success);
+}
+
+.status-pill.active i {
+    color: var(--app-success);
+}
+
+.backend-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--app-text);
+}
+
+.status-pill i {
+    font-size: 0.6rem;
+}
+
+.user-chip {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--app-primary);
+    color: white;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.user-chip:hover {
+    background: #0a58ca;
+}
+
 .cards-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
